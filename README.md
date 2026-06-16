@@ -27,4 +27,4 @@
 详见 [CHANGELOG.md](CHANGELOG.md)
 
 ## 立即尝试
-[https://meet7th.github.io/classroom-seat-arranger/](https://meet7th.github.io/classroom-seat-arranger-main/)
+https://meet7th.github.io/classroom-seat-arranger-main/
