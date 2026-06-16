@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教室座位智能编排系统 v26.6.16</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.26.0/dist/index.js" defer></script>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <!-- Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+    <!-- Undo Bar -->
+    <div class="undo-bar" id="undoBar"><span id="undoBarText"></span><button id="undoBarBtn">撤销</button></div>
+    <!-- [FEATURE #8] Ctrl+K Command Palette -->
+    <div class="cmd-palette-overlay" id="cmdPalette">
+        <div class="cmd-palette">
+            <input class="cmd-input" id="cmdInput" placeholder="搜索学生、操作、功能…" autocomplete="off">
+            <div class="cmd-results" id="cmdResults"></div>
+            <div class="cmd-hint"><span><kbd>↑↓</kbd> 导航</span><span><kbd>Enter</kbd> 执行</span><span><kbd>Esc</kbd> 关闭</span></div>
+        </div>
+    </div>
+    <!-- [FEATURE #12] Right unified side panel -->
+    <div id="sidePanel">
+        <button class="side-panel-close" id="closeSidePanel" aria-label="关闭">×</button>
+        <div class="side-panel-tabs" id="sidePanelTabs">
+            <button class="side-panel-tab active" data-sptab="probability">🔮 概率</button>
+            <button class="side-panel-tab" data-sptab="recommend">🧠 推荐</button>
+            <button class="side-panel-tab" data-sptab="stats">📊 统计</button>
+            <button class="side-panel-tab" data-sptab="relationships">🔗 关系</button>
+        </div>
+        <div class="side-panel-body" id="sidePanelBody">
+            <div id="sp-probability" class="tab-content active"><div id="spProbContent"></div></div>
+            <div id="sp-recommend" class="tab-content"><div id="spRecommendContent"></div></div>
+            <div id="sp-stats" class="tab-content"><div id="spStatsContent"></div></div>
+            <div id="sp-relationships" class="tab-content"><div id="spRelationshipsContent"></div></div>
+        </div>
+    </div>
+    <!-- [FEATURE #11] More menu -->
+    <div class="more-menu" id="moreMenu">
+        <div class="more-menu-grid">
+            <button class="more-menu-item" id="mmReset"><span class="mmi-icon">🔄</span>重置</button>
+            <button class="more-menu-item" id="mmExport"><span class="mmi-icon">📤</span>导出</button>
+            <button class="more-menu-item" id="mmStats"><span class="mmi-icon">📊</span>统计</button>
+            <button class="more-menu-item" id="mmPodium"><span class="mmi-icon">🎓</span>讲台</button>
+            <button class="more-menu-item" id="mmHeatmap"><span class="mmi-icon">🔥</span>热力图</button>
+            <button class="more-menu-item" id="mmPrint"><span class="mmi-icon">🖨️</span>打印</button>
+            <button class="more-menu-item" id="mmGuide"><span class="mmi-icon">📖</span>指南</button>
+            <button class="more-menu-item" id="mmSettings"><span class="mmi-icon">⚙️</span>设置</button>
+            <button class="more-menu-item" id="mmMonteCarlo"><span class="mmi-icon">🧪</span>预演</button>
+            <button class="more-menu-item" id="mmDemo"><span class="mmi-icon">🎬</span>演示</button>
+            <button class="more-menu-item" id="mmAdvExport"><span class="mmi-icon">📤</span>高级导出</button>
+            <button class="more-menu-item" id="mmAdvImport"><span class="mmi-icon">📥</span>高级导入</button>
+            <button class="more-menu-item" id="mmRelGraph"><span class="mmi-icon">🕸️</span>关系网图</button>
+            <button class="more-menu-item" id="mmAutoOptimize"><span class="mmi-icon">⚡</span>一键优化</button>
+        </div>
+    </div>
+    <!-- [FEATURE #14] Mobile bottom Tab Bar -->
+    <div class="mobile-tab-bar" id="mobileTabBar">
+        <div class="tab-bar-inner">
+            <button class="mobile-tab-item active" data-mtab="draw"><span class="mti-icon">🎲</span>抽取</button>
+            <button class="mobile-tab-item" data-mtab="recommend"><span class="mti-icon">🧠</span>推荐</button>
+            <button class="mobile-tab-item" data-mtab="view"><span class="mti-icon">👁️</span>视图</button>
+            <button class="mobile-tab-item" data-mtab="more"><span class="mti-icon">⋯</span>更多</button>
+        </div>
+    </div>
+    <!-- [FEATURE #15] Touch mode sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <!-- Dynamic Island (removed — stats moved to 系统控制台) -->
+    <!-- Probability Panel -->
+    <div class="probability-panel" id="probabilityPanel" style="display:none;">
+        <div class="probability-header" id="probabilityHeader">
+            <span class="probability-title">抽取概率</span>
+            <div class="probability-actions">
+                <button class="probability-toggle-btn" id="probToggleBtn">▼</button>
+                <button class="probability-close" id="closeProbability" aria-label="关闭概率面板">×</button>
+            </div>
+        </div>
+        <div class="probability-content" id="probabilityContent"></div>
+    </div>
+    <!-- Context Menu: Seat -->
+    <div class="context-menu" id="seatContextMenu" role="menu" aria-label="座位操作菜单">
+        <div class="context-menu-item" data-action="swap" role="menuitem">🔄 与另一个座位互换</div>
+        <div class="context-menu-item" data-action="moveToPool" role="menuitem">↩️ 移至待选区</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="toggleLunch" role="menuitem">💤 切换午休状态</div>
+        <div class="context-menu-item" data-action="togglePin" role="menuitem">📌 固定学生</div>
+        <div class="context-menu-item" data-action="viewInfo" role="menuitem">👤 查看学生信息</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="disableSeat" role="menuitem">🚫 禁用此座位</div>
+        <div class="context-menu-item" data-action="enableSeat" role="menuitem">✅ 启用此座位</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item danger" data-action="clearSeat" role="menuitem">🗑️ 清空座位</div>
+    </div>
+    <!-- Context Menu: Column -->
+    <div class="context-menu" id="columnContextMenu" role="menu" aria-label="列操作菜单">
+        <div class="context-menu-item" data-action="disableColumn" role="menuitem">🚫 禁用整列（标记为过道）</div>
+        <div class="context-menu-item" data-action="enableColumn" role="menuitem">✅ 启用整列</div>
+    </div>
+
+    <!-- Settings Modal (System Console) -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal" style="max-width:780px;">
+            <div class="modal-header">
+                <h3 class="modal-title">⚙️ 系统控制台</h3>
+                <button class="modal-close" id="closeSettingsModal" aria-label="关闭">×</button>
+            </div>
+            <div class="modal-content">
+                <!-- Stats Dashboard -->
+                <div class="settings-stats-grid" id="settingsStatsGrid">
+                    <div class="settings-stat-card"><div class="settings-stat-value" id="stTotal">0</div><div class="settings-stat-label">总人数</div></div>
+                    <div class="settings-stat-card"><div class="settings-stat-value" id="stDrawn">0</div><div class="settings-stat-label">已抽取</div></div>
+                    <div class="settings-stat-card"><div class="settings-stat-value" id="stRemaining">0</div><div class="settings-stat-label">剩余</div></div>
+                    <div class="settings-stat-card"><div class="settings-stat-value" id="stLunch">0</div><div class="settings-stat-label">午休</div></div>
+                    <div class="settings-stat-card"><div class="settings-stat-value" id="stLayout">7×11</div><div class="settings-stat-label">当前布局</div></div>
+                    <div class="settings-stat-card"><div class="settings-stat-value" id="stVersion">v26.6.16</div><div class="settings-stat-label">系统版本</div></div>
+                </div>
+                <!-- Settings Tabs -->
+                <div class="tab-bar" id="settingsTabBar">
+                    <button class="tab-btn active" data-stab="appearance">🎨 外观</button>
+                    <button class="tab-btn" data-stab="layout">📐 布局</button>
+                    <button class="tab-btn" data-stab="draw">🎲 抽取</button>
+                    <button class="tab-btn" data-stab="export">📤 导出</button>
+                    <button class="tab-btn" data-stab="interaction">🖱️ 交互</button>
+                    <button class="tab-btn" data-stab="plugins">🔌 插件</button>
+                    <button class="tab-btn" data-stab="data">💾 数据</button>
+                    <button class="tab-btn" data-stab="system">🧩 系统</button>
+                </div>
+                <!-- Tab: Appearance -->
+                <div class="tab-content active" id="stab-appearance">
+                    <div class="form-group">
+                        <label class="form-label">性能模式</label>
+                        <div class="input-group">
+                            <select class="form-input" id="performanceMode" style="min-width:120px;">
+                                <option value="auto">自动检测</option>
+                                <option value="low">🚀 流畅模式</option>
+                                <option value="medium">⚖️ 平衡模式</option>
+                                <option value="high">✨ 高质量模式</option>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" id="perfModeTestBtn">重新检测</button>
+                        </div>
+                        <span class="form-hint">低配电脑建议选择流畅模式</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">主题配色</label>
+                        <div class="theme-grid" id="themeGrid">
+                            <div class="theme-swatch default active" data-theme="" data-name="默认"></div>
+                            <div class="theme-swatch ocean" data-theme="theme-ocean" data-name="海洋"></div>
+                            <div class="theme-swatch forest" data-theme="theme-forest" data-name="森林"></div>
+                            <div class="theme-swatch sunset" data-theme="theme-sunset" data-name="日落"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">强调色</label>
+                        <div class="accent-picker" id="accentPicker">
+                            <div class="accent-dot active" data-color="#007AFF" style="background:#007AFF;"></div>
+                            <div class="accent-dot" data-color="#5856D6" style="background:#5856D6;"></div>
+                            <div class="accent-dot" data-color="#AF52DE" style="background:#AF52DE;"></div>
+                            <div class="accent-dot" data-color="#FF2D55" style="background:#FF2D55;"></div>
+                            <div class="accent-dot" data-color="#FF6B35" style="background:#FF6B35;"></div>
+                            <div class="accent-dot" data-color="#FF9500" style="background:#FF9500;"></div>
+                            <div class="accent-dot" data-color="#34C759" style="background:#34C759;"></div>
+                            <div class="accent-dot" data-color="#00C7BE" style="background:#00C7BE;"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">座位字体大小 (px)</label>
+                        <input type="number" class="form-input" id="seatFontSize" value="13" min="8" max="24">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">午休下划线颜色</label>
+                        <div class="input-group">
+                            <input type="color" class="form-input" id="lunchUnderlineColor" value="#007AFF">
+                            <input type="text" class="form-input" id="lunchUnderlineColorText" value="#007AFF">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px;">
+                        <label class="form-label">顶部信息栏显示项</label>
+                        <div class="form-checkbox"><input type="checkbox" id="qiShowLayout" checked><label for="qiShowLayout">📐 布局尺寸</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="qiShowTotal" checked><label for="qiShowTotal">👥 总人数</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="qiShowDrawn" checked><label for="qiShowDrawn">✅ 已排座</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="qiShowRemaining" checked><label for="qiShowRemaining">⏳ 剩余人数</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="qiShowMale" checked><label for="qiShowMale">♂ 男生 (剩余/总数)</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="qiShowFemale" checked><label for="qiShowFemale">♀ 女生 (剩余/总数)</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="qiShowLunch" checked><label for="qiShowLunch">💤 午休人数</label></div>
+                    </div>
+                </div>
+                <!-- [FEATURE #10] Tab: Layout (moved from sidebar) -->
+                <div class="tab-content" id="stab-layout">
+                    <div class="form-group">
+                        <label class="form-label">教室规模</label>
+                        <div class="input-group">
+                            <input type="number" class="form-input" id="rows" value="7" min="1" max="20" placeholder="排数">
+                            <div class="input-separator">×</div>
+                            <input type="number" class="form-input" id="cols" value="11" min="1" max="20" placeholder="列数">
+                        </div>
+                        <span class="form-hint">排数 1-20，列数 1-20</span>
+                        <span class="form-error" id="layoutError">请输入有效数值（1-20）</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">编号方式</label>
+                        <select class="form-input" id="numberingMode">
+                            <option value="horizontal-snake">横向蛇形</option>
+                            <option value="vertical-snake">竖向蛇形</option>
+                            <option value="random">随机编号</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">布局模板</label>
+                        <div class="btn-group">
+                            <button class="btn btn-ghost btn-sm" data-tpl="7,11">7×11</button>
+                            <button class="btn btn-ghost btn-sm" data-tpl="6,9">6×9</button>
+                            <button class="btn btn-ghost btn-sm" data-tpl="5,8">5×8</button>
+                            <button class="btn btn-ghost btn-sm" data-tpl="8,12">8×12</button>
+                            <button class="btn btn-ghost btn-sm" data-tpl="4,6">4×6</button>
+                        </div>
+                    </div>
+                    <div class="form-checkbox"><input type="checkbox" id="showPlatformLeft" checked><label for="showPlatformLeft">显示讲台左座位</label></div>
+                    <div class="form-checkbox"><input type="checkbox" id="showPlatformRight" checked><label for="showPlatformRight">显示讲台右座位</label></div>
+                    <button class="btn btn-primary" id="applyLayout">应用布局</button>
+                </div>
+                <!-- [FEATURE #10] Tab: Draw Settings (moved from sidebar) -->
+                <div class="tab-content" id="stab-draw">
+                    <div class="form-group">
+                        <label class="form-label">抽取模式</label>
+                        <select class="form-input" id="drawMode">
+                            <option value="predictable">公平可预测</option>
+                            <option value="unpredictable">公平不可预测</option>
+                        </select>
+                    </div>
+                    <div class="form-checkbox"><input type="checkbox" id="genderBalance" checked><label for="genderBalance">启用性别均衡</label></div>
+                    <div class="form-checkbox"><input type="checkbox" id="antiCluster" checked><label for="antiCluster">启用防扎堆</label></div>
+                </div>
+                <!-- Tab: Export -->
+                <div class="tab-content" id="stab-export">
+                    <div class="form-group">
+                        <label class="form-label">导出截图背景色</label>
+                        <div class="input-group">
+                            <input type="color" class="form-input" id="screenshotBgColor" value="#ffffff">
+                            <input type="text" class="form-input" id="screenshotBgColorText" value="#ffffff">
+                        </div>
+                        <div class="form-checkbox"><input type="checkbox" id="screenshotTransparentBg"><label for="screenshotTransparentBg">透明背景</label></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">导出选项</label>
+                        <div class="form-checkbox"><input type="checkbox" id="exportIncludeGender" checked><label for="exportIncludeGender">包含性别信息</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="exportIncludeLunch" checked><label for="exportIncludeLunch">包含午休信息</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="exportIncludeSeatNumber" checked><label for="exportIncludeSeatNumber">包含座位号</label></div>
+                    </div>
+                </div>
+                <!-- Tab: Interaction -->
+                <div class="tab-content" id="stab-interaction">
+                    <div class="form-group">
+                        <label class="form-label">交互方式</label>
+                        <div class="form-checkbox"><input type="checkbox" id="enableDragDrop" checked><label for="enableDragDrop">启用座位拖拽</label></div>
+                        <div class="form-checkbox"><input type="checkbox" id="enableClickSwap" checked><label for="enableClickSwap">启用点击互换</label></div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px;">
+                        <label class="form-label">自动抽取间隔 (ms)</label>
+                        <input type="number" class="form-input" id="autoDrawIntervalInline" value="800" min="200" max="5000">
+                        <span class="form-hint">一键自动抽取时，每次抽取的间隔时间 (200-5000ms)</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">抽取动画时长 (ms)</label>
+                        <input type="number" class="form-input" id="drawAnimationDuration" value="400" min="100" max="1500">
+                        <span class="form-hint">座位分配时的高亮动画持续时间</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">浮动面板</label>
+                        <div class="form-checkbox"><input type="checkbox" id="showProbabilityByDefault" checked><label for="showProbabilityByDefault">默认显示概率预测面板</label></div>
+                    </div>
+                    <div class="form-group" style="margin-top:8px;">
+                        <label class="form-label">演示速度 (ms)</label>
+                        <input type="range" class="form-input" id="demoSpeed" min="200" max="2000" step="100" value="600" style="padding:6px 0;">
+                        <span class="form-hint">演示模式中每个座位高亮的间隔时间（当前: <span id="demoSpeedVal">600</span>ms）</span>
+                    </div>
+                </div>
+                <!-- Tab: Data -->
+                <div class="tab-content" id="stab-data">
+                    <div class="form-group">
+                        <label class="form-label">缓存管理</label>
+                        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">系统每 5 秒自动保存配置到浏览器本地存储。</p>
+                        <button class="btn btn-danger" id="clearCacheBtn">清除本地缓存</button>
+                    </div>
+                </div>
+                <!-- [FEATURE #10] Tab: Plugins (moved from sidebar) -->
+                <div class="tab-content" id="stab-plugins">
+                    <div class="form-group">
+                        <label class="form-label">插件管理</label>
+                        <div id="pluginsList"></div>
+                        <div class="btn-group" style="margin-top:8px;">
+                            <button class="btn btn-secondary" id="importPlugin">导入插件</button>
+                            <input type="file" id="pluginFile" accept=".js" style="display:none;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--glass-border);">
+                        <label class="form-label">⏱️ 自动抽取间隔 (ms)</label>
+                        <input type="number" class="form-input" id="autoDrawIntervalPlugin" value="800" min="200" max="5000" style="max-width:120px;">
+                        <span class="form-hint">一键自动抽取时每次抽取的间隔 (200-5000ms)</span>
+                    </div>
+                </div>
+                <!-- [FEATURE #10] Tab: System (moved from sidebar) -->
+                <div class="tab-content" id="stab-system">
+                    <div class="form-group">
+                        <label class="form-label">📦 模块管理</label>
+                        <div id="moduleList"></div>
+                        <div class="btn-group" style="margin-top:8px;">
+                            <button class="btn btn-secondary btn-sm" id="importModule">📥 导入系统模块</button>
+                            <input type="file" id="moduleFile" accept=".js" style="display:none;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:12px;">
+                        <label class="form-label">💓 系统健康</label>
+                        <div class="health-grid" id="healthGrid"></div>
+                    </div>
+                    <div class="form-group" style="margin-top:12px;">
+                        <label class="form-label">🎨 主题仓库</label>
+                        <div id="themeRepoList"></div>
+                        <div class="btn-group" style="margin-top:8px;">
+                            <button class="btn btn-secondary btn-sm" id="exportTheme">📤 导出主题</button>
+                            <button class="btn btn-secondary btn-sm" id="importTheme">📥 导入主题</button>
+                            <input type="file" id="themeFile" accept=".json" style="display:none;">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top:12px;">
+                        <label class="form-label">🛡️ 安全报告</label>
+                        <div id="securityReport"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="resetSettings">恢复默认</button>
+                <button class="btn btn-primary" id="saveSettings">保存设置</button>
+            </div>
+        </div>
+    </div>
+    <!-- Clear Cache Modal -->
+    <div class="modal-overlay" id="clearCacheModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title">清除本地缓存</h3><button class="modal-close" id="closeClearCacheModal" aria-label="关闭">×</button></div>
+            <div class="modal-content">
+                <div class="guide-note">⚠️ 此操作不可恢复，请谨慎选择</div>
+                <div class="form-checkbox"><input type="checkbox" id="clearAllData" checked><label for="clearAllData">所有配置和学生数据</label></div>
+                <div class="form-checkbox"><input type="checkbox" id="clearHistory" checked><label for="clearHistory">历史排座记录</label></div>
+                <div class="form-checkbox"><input type="checkbox" id="clearPlugins" checked><label for="clearPlugins">已安装的插件</label></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelClearCache">取消</button>
+                <button class="btn btn-danger" id="confirmClearCache">确认清除</button>
+            </div>
+        </div>
+    </div>
+    <!-- Plugin Settings Modal -->
+    <div class="modal-overlay" id="pluginSettingsModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title" id="pluginSettingsTitle">插件设置</h3><button class="modal-close" id="closePluginSettingsModal" aria-label="关闭">×</button></div>
+            <div class="modal-content" id="pluginSettingsContent"></div>
+            <div class="modal-footer"><button class="btn btn-primary" id="savePluginSettings">保存</button></div>
+        </div>
+    </div>
+    <!-- Stats Dashboard Modal -->
+    <div class="modal-overlay" id="statsModal">
+        <div class="modal" style="max-width:640px;">
+            <div class="modal-header"><h3 class="modal-title">📊 排座统计</h3><button class="modal-close" id="closeStatsModal" aria-label="关闭">×</button></div>
+            <div class="modal-content" id="statsContent"></div>
+            <div class="modal-footer"><button class="btn btn-primary" id="closeStatsBtn">关闭</button></div>
+        </div>
+    </div>
+    <!-- Screenshot Preview Modal -->
+    <div class="modal-overlay" id="previewModal">
+        <div class="modal" style="max-width:800px;">
+            <div class="modal-header"><h3 class="modal-title">📸 截图导出预览</h3><button class="modal-close" id="closePreviewModal" aria-label="关闭">×</button></div>
+            <div class="modal-content">
+                <div class="preview-frame" id="previewFrame"><p style="color:var(--text-tertiary);">点击"生成预览"查看效果</p></div>
+                <div class="preview-options">
+                    <div class="form-group">
+                        <label class="form-label">导出格式</label>
+                        <select class="form-input" id="previewFormat">
+                            <option value="png">PNG (无损)</option>
+                            <option value="jpeg">JPEG (有损，体积小)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">分辨率倍率</label>
+                        <select class="form-input" id="previewScale">
+                            <option value="1">1x (标准)</option>
+                            <option value="2" selected>2x (高清)</option>
+                            <option value="3">3x (超清)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">JPEG 质量 (仅JPEG有效)</label>
+                        <input type="range" class="form-input" id="previewQuality" min="0.1" max="1" step="0.1" value="0.9" style="padding:6px 0;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">水印文字 (留空不添加)</label>
+                        <input type="text" class="form-input" id="previewWatermark" placeholder="如：XX班座位表 2024秋季">
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+                    <div class="form-checkbox"><input type="checkbox" id="previewIncludeTitle" checked><label for="previewIncludeTitle">包含标题</label></div>
+                    <div class="form-checkbox"><input type="checkbox" id="previewIncludePlatform" checked><label for="previewIncludePlatform">包含讲台座位</label></div>
+                    <div class="form-checkbox"><input type="checkbox" id="previewIncludeStats"><label for="previewIncludeStats">包含统计信息叠加</label></div>
+                    <div class="form-checkbox"><input type="checkbox" id="previewIncludeDate" checked><label for="previewIncludeDate">包含日期时间戳</label></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="generatePreview">🔍 生成预览</button>
+                <button class="btn btn-primary" id="downloadPreview">⬇️ 下载截图</button>
+            </div>
+        </div>
+    </div>
+    <!-- Student Info Popup -->
+    <div class="student-info-popup" id="studentInfoPopup" style="display:none;">
+        <div class="student-info-name" id="infoStudentName"></div>
+        <div id="infoStudentDetails"></div>
+    </div>
+    <!-- Advanced Export Modal -->
+    <div class="modal-overlay" id="advExportModal">
+        <div class="modal" style="max-width:560px;">
+            <div class="modal-header"><h3 class="modal-title">📤 高级导出</h3><button class="modal-close" id="closeAdvExportModal" aria-label="关闭">×</button></div>
+            <div class="modal-content">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">选择需要导出的数据模块：</p>
+                <div class="btn-group" style="margin-bottom:8px;">
+                    <button class="btn btn-ghost btn-sm" id="advExportSelectAll">全选</button>
+                    <button class="btn btn-ghost btn-sm" id="advExportDeselectAll">取消全选</button>
+                </div>
+                <div class="adv-export-grid" id="advExportGrid">
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="students" checked> 👥 学生名单</label>
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="bwlists" checked> 📋 黑白名单（含概率设置）</label>
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="seats" checked> 🪑 当前座位分配</label>
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="settings" checked> ⚙️ 系统设置</label>
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="plugins" checked> 🔌 插件列表及配置</label>
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="history" checked> 📋 操作历史</label>
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="relationships" checked> 🔗 关系网络</label>
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="theme" checked> 🎨 主题与外观设定</label>
+                    <label class="adv-export-item checked"><input type="checkbox" data-module="demo" checked> 🎬 演示序列（若已配置）</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelAdvExport">取消</button>
+                <button class="btn btn-primary" id="confirmAdvExport">📥 导出 JSON</button>
+            </div>
+        </div>
+    </div>
+    <!-- Advanced Import Modal -->
+    <div class="modal-overlay" id="advImportModal">
+        <div class="modal" style="max-width:560px;">
+            <div class="modal-header"><h3 class="modal-title">📥 高级导入</h3><button class="modal-close" id="closeAdvImportModal" aria-label="关闭">×</button></div>
+            <div class="modal-content" id="advImportContent">
+                <p style="font-size:13px;color:var(--text-secondary);">加载中...</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelAdvImport">取消</button>
+                <button class="btn btn-primary" id="confirmAdvImport">📤 导入选中模块</button>
+            </div>
+        </div>
+    </div>
+    <!-- Import Display Option Modal -->
+    <div class="modal-overlay" id="importDisplayOptionModal">
+        <div class="modal" style="max-width:420px;">
+            <div class="modal-header"><h3 class="modal-title">🪑 座位数据导入方式</h3><button class="modal-close" id="closeImportDisplayOption" aria-label="关闭">×</button></div>
+            <div class="modal-content">
+                <p style="font-size:14px;color:var(--text-primary);margin-bottom:12px;">检测到导入数据中包含 <strong id="importSeatCount">0</strong> 个座位分配，请选择导入方式：</p>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <label class="form-checkbox" style="padding:12px;background:var(--bg-secondary);border-radius:var(--radius-sm);border:1px solid var(--seat-border);">
+                        <input type="radio" name="importDisplayOption" value="display" checked style="width:18px;height:18px;accent-color:var(--primary);">
+                        <div><strong>📊 展示座位数据</strong><br><span style="font-size:12px;color:var(--text-tertiary);">立即在教室布局中显示所有座位分配结果</span></div>
+                    </label>
+                    <label class="form-checkbox" style="padding:12px;background:var(--bg-secondary);border-radius:var(--radius-sm);border:1px solid var(--seat-border);">
+                        <input type="radio" name="importDisplayOption" value="hide" style="width:18px;height:18px;accent-color:var(--primary);">
+                        <div><strong>🎲 不展示，直接开始抽取</strong><br><span style="font-size:12px;color:var(--text-tertiary);">座位数据将作为抽取顺序，点击「抽取下一个」或「一键自动抽取」时按导入顺序逐个填充座位（与演示逻辑相同）</span></div>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelImportDisplayOption">取消</button>
+                <button class="btn btn-primary" id="confirmImportDisplayOption">✅ 确认导入</button>
+            </div>
+        </div>
+    </div>
+    <!-- Integrated Relationship Network Modal (Graph + Management) -->
+    <div class="modal-overlay" id="relGraphModal">
+        <div class="modal rel-graph-modal">
+            <div class="modal-header">
+                <h3 class="modal-title">🕸️ 关系网络管理</h3>
+                <button class="modal-close" id="closeRelGraphModal" aria-label="关闭">×</button>
+            </div>
+            <div class="rel-graph-body">
+                <!-- Left: Canvas Graph -->
+                <div class="rel-graph-left">
+                    <div class="rel-graph-toolbar">
+                        <select id="relGraphTypeFilter" class="form-input" style="width:110px;">
+                            <option value="all">全部类型</option>
+                        </select>
+                        <select id="relGraphSignFilter" class="form-input" style="width:90px;">
+                            <option value="all">全部</option>
+                            <option value="positive">正向</option>
+                            <option value="negative">负向</option>
+                        </select>
+                        <div class="rel-graph-toolbar-group">
+                            <button class="btn btn-ghost btn-sm" id="relGraphZoomIn" title="放大">➕</button>
+                            <button class="btn btn-ghost btn-sm" id="relGraphZoomOut" title="缩小">➖</button>
+                            <button class="btn btn-ghost btn-sm" id="relGraphReset" title="重置">🔄</button>
+                            <button class="btn btn-ghost btn-sm" id="relGraphExportImg" title="导出图片">📸</button>
+                            <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-secondary);cursor:pointer;">
+                                <input type="checkbox" id="relGraphShowLabels" checked> 姓名
+                            </label>
+                        </div>
+                    </div>
+                    <div class="rel-graph-canvas-wrapper" id="relGraphCanvasWrapper">
+                        <canvas id="relGraphCanvas"></canvas>
+                        <div class="rel-graph-tooltip" id="relGraphTooltip" style="display:none;"></div>
+                        <div class="rel-graph-context-menu" id="relGraphContextMenu" style="display:none;">
+                            <div class="context-menu-item" id="relCtxAddRelation">➕ 添加关系</div>
+                            <div class="context-menu-item" id="relCtxEditRelation">✏️ 编辑关系</div>
+                            <div class="context-menu-item danger" id="relCtxDeleteRelation">🗑️ 删除关系</div>
+                            <div class="context-menu-divider"></div>
+                            <div class="context-menu-item" id="relCtxFixNode">📌 固定/释放节点</div>
+                            <div class="context-menu-item" id="relCtxHighlightConnected">🔗 高亮关联节点</div>
+                        </div>
+                    </div>
+                    <div class="rel-graph-stats" id="relGraphStats"></div>
+                    <div class="rel-graph-legend" id="relGraphLegend"></div>
+                </div>
+                <!-- Right: Relationship Management Panel -->
+                <div class="rel-graph-right">
+                    <div class="rel-graph-panel-header">
+                        <span id="relFormTitle">➕ 添加关系</span>
+                    </div>
+                    <div class="rel-form" id="relForm">
+                        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+                            <input class="form-input rel-student-search" id="relStudent1Input" placeholder="学生 A…" style="flex:1;min-width:90px;font-size:12px;">
+                            <span style="color:var(--text-tertiary);font-size:12px;">与</span>
+                            <input class="form-input rel-student-search" id="relStudent2Input" placeholder="学生 B…" style="flex:1;min-width:90px;font-size:12px;">
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                            <select class="form-input" id="relTypeSelect" style="flex:1;min-width:150px;font-size:12px;"></select>
+                            <div style="display:flex;align-items:center;gap:3px;flex:1;min-width:100px;">
+                                <input type="range" id="relScoreSlider" min="-100" max="100" value="0" style="flex:1;">
+                                <input class="form-input" id="relScoreInput" type="number" min="-999" max="999" value="0" style="width:55px;text-align:center;font-size:12px;">
+                            </div>
+                            <button class="btn btn-primary btn-sm" id="relSaveBtn">💾 保存</button>
+                        </div>
+                        <div id="relStudent1Id" style="display:none;"></div>
+                        <div id="relStudent2Id" style="display:none;"></div>
+                        <div id="relEditId" style="display:none;"></div>
+                    </div>
+                    <div class="rel-filter-bar">
+                        <input class="form-input" id="relSearchInput" placeholder="🔍 搜索…" style="flex:1;min-width:80px;font-size:12px;">
+                        <select class="form-input" id="relTypeFilter" style="width:120px;font-size:12px;">
+                            <option value="all">全部类型</option>
+                        </select>
+                        <select class="form-input" id="relSignFilter" style="width:90px;font-size:12px;">
+                            <option value="all">全部</option>
+                            <option value="positive">正向</option>
+                            <option value="negative">负向</option>
+                        </select>
+                    </div>
+                    <div class="rel-grid" id="relGrid"></div>
+                    <div class="rel-graph-panel-footer">
+                        <button class="btn btn-ghost btn-xs" id="relExportBtn">📤 导出</button>
+                        <button class="btn btn-ghost btn-xs" id="relImportBtn">📥 导入</button>
+                        <button class="btn btn-danger btn-xs" id="relClearAllBtn">🗑️ 清空</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div style="font-size:11px;color:var(--text-tertiary);">拖拽节点 · 滚轮缩放 · 右键操作 · 悬停查看</div>
+                <button class="btn btn-secondary" id="closeRelGraphModalBtn">关闭</button>
+            </div>
+        </div>
+    </div>
+    <!-- Demo Toolbar (overlay on preview container) -->
+    <div class="demo-toolbar" id="demoToolbar">
+        <span style="font-weight:600;">🎬 演示中</span>
+        <span id="demoProgress" style="color:var(--text-secondary);font-size:12px;">0/0</span>
+        <button class="btn btn-ghost btn-sm" id="demoPauseBtn">⏸ 暂停</button>
+        <button class="btn btn-danger btn-sm" id="demoStopBtn">⏹ 结束</button>
+    </div>
+    <!-- Student Detail Modal -->
+    <div class="modal-overlay" id="studentDetailModal">
+        <div class="modal" style="max-width:520px;">
+            <div class="modal-header">
+                <h3 class="modal-title" id="studentDetailName">学生详情</h3>
+                <button class="modal-close" id="closeStudentDetail" aria-label="关闭">×</button>
+            </div>
+            <div class="modal-content" id="studentDetailContent"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="closeStudentDetailBtn">关闭</button>
+                <button class="btn btn-secondary" id="editStudentBtn">✏️ 编辑</button>
+                <button class="btn btn-primary" id="locateStudentBtn">📍 定位座位</button>
+            </div>
+        </div>
+    </div>
+    <!-- Smart Recommendation Panel (side panel, not modal) -->
+    <div class="recommend-panel" id="recommendPanel">
+        <div class="recommend-panel-header">
+            <span class="recommend-panel-title">🧠 智能推荐</span>
+            <div style="display:flex;gap:4px;align-items:center;">
+                <button class="island-close" id="openCustomAlgo" title="自定义算法" style="font-size:12px;width:auto;padding:2px 8px;border-radius:var(--radius-pill);">🧬</button>
+                <button class="island-close" id="closeRecommendPanel" aria-label="关闭推荐面板">×</button>
+            </div>
+        </div>
+        <div class="recommend-panel-body" id="recommendContent"></div>
+        <div class="recommend-panel-footer">
+            <button class="btn btn-ghost btn-sm" id="autoOptimizeBtn" title="一键优化座位">⚡ 一键优化</button>
+            <button class="btn btn-ghost btn-sm" id="closeRecommendBtn">关闭</button>
+            <button class="btn btn-primary btn-sm" id="applyAllRecommend">全部采纳</button>
+        </div>
+    </div>
+    <!-- Custom Algorithm Panel -->
+    <div class="modal-overlay" id="customAlgoModal">
+        <div class="modal" style="max-width:600px;">
+            <div class="modal-header">
+                <h3 class="modal-title">🧬 自定义推荐算法</h3>
+                <button class="modal-close" id="closeCustomAlgo" aria-label="关闭">×</button>
+            </div>
+            <div class="modal-content">
+                <div class="guide-note">导入自定义的评估函数来替换或增强内置的智能推荐算法。自定义算法需遵循标准接口。</div>
+                <div class="form-group" style="margin-top:12px;">
+                    <label class="form-label">当前算法</label>
+                    <div id="currentAlgoDisplay" style="font-size:13px;color:var(--text-secondary);padding:8px;background:var(--bg-tertiary);border-radius:var(--radius-sm);">内置算法 (CompositeEval)</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">已导入的算法</label>
+                    <div id="customAlgoList" style="font-size:12px;color:var(--text-tertiary);padding:8px;">暂无自定义算法</div>
+                </div>
+                <div class="btn-group" style="margin-top:8px;">
+                    <button class="btn btn-secondary" id="importCustomAlgo">📥 导入算法文件</button>
+                    <button class="btn btn-ghost btn-sm" id="downloadAlgoTemplate">📄 下载算法模板</button>
+                    <input type="file" id="customAlgoFile" accept=".js" style="display:none;">
+                </div>
+                <div class="guide-section" style="margin-top:16px;">
+                    <h5>算法接口规范</h5>
+                    <div class="code-block">/**
+ * 自定义推荐算法接口
+ * 必须导出以下函数：
+ */
+const CustomAlgorithm = {
+    name: "算法名称",
+    version: "1.0.0",
+    description: "算法描述",
+
+    /**
+     * 计算两名学生的良性影响分
+     * @param {Object} s1 - 学生对象
+     * @param {Object} s2 - 学生对象
+     * @param {Object} context - 上下文 { seats, settings }
+     * @returns {number} 影响分 (越高越好)
+     */
+    peerInfluence(s1, s2, context) {
+        let score = 0;
+        // 自定义评分逻辑
+        return score;
+    },
+
+    /**
+     * 生成互换推荐
+     * @param {Array} seatedStudents - 已排座学生 [{student, seat}]
+     * @param {Object} context - 上下文
+     * @returns {Array} 推荐列表 [{seat1, seat2, reason, priority}]
+     */
+    generateRecommendations(seatedStudents, context) {
+        return [];
+    },
+
+    /**
+     * 可选：计算单个学生的综合评分
+     * @param {Object} student - 学生对象
+     * @returns {number} 0-100 综合评分
+     */
+    getScore(student) {
+        return 50;
+    }
+};
+AlgorithmRegistry.register(CustomAlgorithm);</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="resetToBuiltinAlgo">恢复内置算法</button>
+                <button class="btn btn-primary" id="closeCustomAlgoBtn">完成</button>
+            </div>
+        </div>
+    </div>
+    <!-- Algorithm Explanation Modal (removed — content moved to 操作指南 → 运行逻辑 tab) -->
+    <!-- Help Modal -->
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal" style="max-width:860px;">
+            <div class="modal-header"><h3 class="modal-title">📖 操作指南</h3><button class="modal-close" id="closeHelpModal" aria-label="关闭">×</button></div>
+            <div class="modal-content">
+                <div class="tab-bar" id="helpTabBar">
+                    <button class="tab-btn active" data-tab="guide">快速开始</button>
+                    <button class="tab-btn" data-tab="templates">数据模板</button>
+                    <button class="tab-btn" data-tab="algorithm">运行逻辑</button>
+                    <button class="tab-btn" data-tab="ai-algo">AI算法开发</button>
+                    <button class="tab-btn" data-tab="plugins">插件开发</button>
+                </div>
+                <!-- Tab: 快速开始 -->
+                <div class="tab-content active" id="tab-guide">
+                    <div class="guide-section"><h4>📋 功能索引</h4>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;">
+                            <button class="btn btn-ghost btn-sm" id="guideGoAlgorithm">🧮 运行逻辑</button>
+                            <button class="btn btn-ghost btn-sm" id="guideGoAiAlgo">🧬 AI算法开发</button>
+                            <button class="btn btn-ghost btn-sm" id="guideGoPlugins">🔌 插件开发</button>
+                        </div>
+                    </div>
+                    <div class="guide-section"><h4>🚀 3步开始</h4><ol class="guide-list">
+                        <li><strong>设置布局</strong>：切换到"布局"Tab → 设置排数、列数</li>
+                        <li><strong>导入学生</strong>：切换到"学生"Tab → 粘贴名单或导入Excel</li>
+                        <li><strong>开始抽取</strong>：点击底部 <code>🎲 抽取下一个</code> 或 <code>⚡ 一键自动抽取</code></li>
+                    </ol>
+                    <div class="btn-group" style="margin-top:8px;">
+                        <button class="btn btn-secondary btn-sm" id="guideTryFillExample">🎯 试一试：填入示例学生</button>
+                        <button class="btn btn-secondary btn-sm" id="guideTryLayout">🎯 试一试：设置布局</button>
+                        <button class="btn btn-secondary btn-sm" id="guideTryPodium">🎯 试一试：切换讲台视角</button>
+                        <button class="btn btn-secondary btn-sm" id="guideTryHeatmap">🎯 试一试：热力图</button>
+                    </div>
+                    </div>
+                    <div class="guide-section"><h4>🧠 智能推荐 & 自定义算法</h4><ul class="guide-list">
+                        <li>点击底部 <code>🧠 智能推荐 ▾</code> 按钮，下拉菜单有两个选项：
+                            <ul>
+                                <li><strong>🧠 智能推荐</strong>：分析当前座位，找出可优化的互换方案</li>
+                                <li><strong>🧬 自定义算法</strong>：导入你自己的推荐算法（.js文件）</li>
+                            </ul>
+                        </li>
+                        <li>推荐面板以侧边栏形式展示，鼠标悬停可预览高亮效果</li>
+                        <li>自定义算法需实现 <code>peerInfluence</code> 接口，详见"AI算法开发"Tab</li>
+                    </ul></div>
+                    <div class="guide-section"><h4>📋 黑白名单特殊标记</h4><ul class="guide-list">
+                        <li>在名单中使用 <code>*</code> 前缀标记"锚点"成员，例如：<code>*张三 李四 王五</code></li>
+                        <li><strong>黑名单</strong>：默认只有组内第一个被抽到的人作为锚点，其他人只在靠近锚点时被惩罚</li>
+                        <li><strong>白名单</strong>：默认所有已抽到的组员都可吸引剩余组员靠近</li>
+                        <li>使用 <code>*</code> 标记可指定哪些人是锚点（惩罚/吸引只对标记成员生效）</li>
+                    </ul></div>
+                    <div class="guide-section"><h4>🪑 座位操作</h4><ul class="guide-list">
+                        <li><strong>拖拽互换</strong>：按住座位拖到另一个座位上松开</li>
+                        <li><strong>点击互换</strong>：先点第一个座位（蓝色边框），再点第二个</li>
+                        <li><strong>右键菜单</strong>：右键/长按座位进行更多操作</li>
+                        <li><strong>切换午休</strong>：点击已有人的座位切换午休状态</li>
+                        <li><strong>批量模式</strong>：按 B 键进入，点选多个座位后批量操作</li>
+                    </ul></div>
+                    <div class="guide-section"><h4>⌨️ 快捷键</h4><ul class="guide-list">
+                        <li><strong>空格</strong>：抽取下一个学生</li>
+                        <li><strong>ESC</strong>：取消选取/关闭弹窗/退出批量模式</li>
+                        <li><strong>Ctrl+S</strong>：手动保存 | <strong>Ctrl+Z</strong>：撤销 | <strong>Ctrl+Y</strong>：重做</li>
+                        <li><strong>B</strong>：批量选择模式 | <strong>方向键</strong>：座位间导航</li>
+                    </ul></div>
+                    <div class="guide-section"><h4>📦 模块 & 插件</h4><ul class="guide-list">
+                        <li><strong>插件管理</strong>（高级Tab）：导入 .js 插件扩展功能，支持安全扫描</li>
+                        <li><strong>模块管理</strong>（系统Tab）：查看系统模块状态，可导入自定义模块</li>
+                        <li><strong>自动抽取间隔</strong>：在高级Tab → 插件管理区域可直接调整</li>
+                    </ul></div>
+                </div>
+                <!-- Tab: 数据模板 -->
+                <div class="tab-content" id="tab-templates">
+                    <div class="guide-section"><h4>📥 导入模板下载</h4>
+                        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">下载模板文件，按格式填写后导入系统。支持文本粘贴和 Excel 文件两种方式。</p>
+                    </div>
+                    <div class="guide-section">
+                        <h5>📋 学生名单模板（文本格式）</h5>
+                        <div class="guide-note">格式：姓名,性别,午休,语文,数学,英语,物理,化学,历史,地理,政治,生物,性格,爱好,职务<br>午休：1=是，0=否。爱好用/分隔。可省略性格、爱好、职务列。</div>
+                        <div class="code-block" style="margin:8px 0;">张三,男,1,85,92,78,88,76,90,82,85,88,外向,篮球/绘画,班长
+李四,女,0,92,88,95,90,85,88,92,90,95,内向,阅读/音乐,学习委员
+王五,男,0,78,65,72,80,68,75,70,72,78,中性,篮球,体育委员</div>
+                        <div class="btn-group" style="margin-top:8px;">
+                            <button class="btn btn-secondary btn-sm" id="downloadTextTemplate">📄 下载文本模板 (.txt)</button>
+                            <button class="btn btn-secondary btn-sm" id="downloadExcelTemplate">📊 下载 Excel 模板 (.xlsx)</button>
+                        </div>
+                    </div>
+                    <div class="guide-section">
+                        <h5>🚫 黑名单/白名单模板</h5>
+                        <div class="guide-note">格式：每行一组，空格分隔学生姓名。黑名单同组学生会被尽量分开，白名单同组学生会被尽量安排坐在一起。<br>使用 <code>*</code> 前缀标记"锚点"成员（如 <code>*张三 李四</code>），只有锚点会对其他成员产生影响。</div>
+                        <div class="code-block" style="margin:8px 0;"># 黑名单示例（同组分开坐）
+张三 李四
+王五 赵六
+
+# 黑名单-指定锚点（只有张三是锚点）
+*张三 李四 王五
+
+# 白名单示例（同组靠近坐）
+小明 小红
+小刚 小丽</div>
+                        <div class="btn-group" style="margin-top:8px;">
+                            <button class="btn btn-secondary btn-sm" id="downloadBlacklistTemplate">📄 下载黑名单模板 (.txt)</button>
+                            <button class="btn btn-secondary btn-sm" id="downloadWhitelistTemplate">📄 下载白名单模板 (.txt)</button>
+                        </div>
+                    </div>
+                    <div class="guide-section">
+                        <h5>💡 导入提示</h5>
+                        <ul class="guide-list">
+                            <li>Excel 导入时，系统会自动匹配表头中的科目名称（如"语文""数学"）</li>
+                            <li>如果 Excel 没有表头，按默认列顺序解析：姓名、性别、午休、各科成绩…</li>
+                            <li>成绩范围按科目满分自动修正（可在"导入学生→科目管理"中设置各科满分）</li>
+                            <li>性格支持：外向、内向、中性</li>
+                            <li>职务支持：班长、副班长、学习委员、体育委员、文艺委员、劳动委员、小组长、课代表</li>
+                        </ul>
+                    </div>
+                </div>
+                <!-- Tab: 运行逻辑 -->
+                <div class="tab-content" id="tab-algorithm">
+                    <div class="guide-section">
+                        <h4>🧮 综合评价指数</h4>
+                        <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">综合评价指数是一个 0-100 的分数，综合考量学生的学业成绩、性格特征、兴趣爱好、班级职务等多维度信息，是智能座位编排的核心依据。</p>
+                        <div class="algo-formula">综合评价 = Σ(维度得分 × 维度权重) / Σ(有效权重)
+
+学业成绩 = 所有科目成绩的平均值
+性格评分 = 外向70 / 内向65 / 中性80（适应性评分）
+爱好评分 = min(100, 50 + 爱好数量×10)
+职务评分 = 班长95 / 学习委员90 / 体育委员85 / ...</div>
+                        <div id="algoWeightBars"></div>
+                    </div>
+                    <div class="guide-section">
+                        <h4>🔮 抽取概率算法</h4>
+                        <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">
+                            <strong>公平可预测</strong>：每位学生有基础概率，经黑白名单、性别均衡、历史邻座惩罚调整后归一化。<br>
+                            <strong>公平不可预测</strong>：在可预测基础上加入随机扰动，使结果更难预测但仍然公平。
+                        </p>
+                    </div>
+                    <div class="guide-section">
+                        <h4>🧠 智能推荐逻辑</h4>
+                        <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">系统分析已排座位中所有相邻学生对的"良性影响分"，找出可以优化的互换方案：</p>
+                        <div class="algo-formula">良性影响分 = 学业互补(0-20) + 性格互补(0-15)
+          + 共同爱好(0-20) + 职务多样(0-10) + 性别均衡(0-5)
+
+1. 计算当前所有相邻对的总良性影响分
+2. 尝试每对学生互换，计算互换后的总分变化
+3. 选择总分提升最大的互换方案作为推荐
+4. 每条推荐附带具体原因说明</div>
+                    </div>
+                    <div class="guide-section">
+                        <h4>🔥 热力图类型</h4>
+                        <ul class="guide-list">
+                            <li><strong>综合评价热力图</strong>：基于上述多维评价指数，颜色越绿表示综合能力越强</li>
+                            <li><strong>综合成绩热力图</strong>：仅基于所有科目成绩平均值</li>
+                            <li><strong>单科成绩热力图</strong>：基于选定科目的单科成绩</li>
+                        </ul>
+                    </div>
+                </div>
+                <!-- Tab: AI算法开发 -->
+                <div class="tab-content" id="tab-ai-algo">
+                    <div class="guide-section"><h4>🧬 AI 推荐算法开发指南</h4>
+                        <div class="guide-note">本文档供开发者参考，用于创建自定义的座位推荐算法。自定义算法可替换或增强内置的智能推荐引擎。</div>
+                        <h5 style="margin-top:12px;">算法接口</h5>
+                        <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:8px;">自定义算法需实现一个 JavaScript 对象，包含以下核心方法：</p>
+                        <div class="code-block">const CustomAlgorithm = {
+    name: "我的算法",
+    version: "1.0.0",
+    description: "自定义推荐算法",
+
+    // 核心方法1：计算两名学生的良性影响分
+    peerInfluence(s1, s2, context) {
+        // s1, s2: 学生对象
+        // context: { seats, settings, rows, cols }
+        // 返回: number (越高表示越应该坐在一起)
+        return 0;
+    },
+
+    // 核心方法2：生成互换推荐
+    generateRecommendations(seatedStudents, context) {
+        // seatedStudents: [{student, seat}, ...]
+        // 返回: [{seat1, seat2, reason, priority}]
+        return [];
+    },
+
+    // 可选：计算学生综合评分 (用于热力图)
+    getScore(student) { return 50; }
+};</div>
+
+                        <h5 style="margin-top:12px;">学生对象结构</h5>
+                        <div class="code-block">{
+    id: Number,          // 唯一ID
+    name: String,        // 姓名
+    gender: 'male'|'female',
+    lunch: Boolean,      // 是否午休
+    pinned: Boolean,     // 是否固定
+    scores: {            // 多科成绩
+        '语文': 85, '数学': 92, '英语': 78 ...
+    },
+    personality: '外向'|'内向'|'中性'|null,
+    hobbies: ['篮球', '绘画'],
+    position: '班长'|'学习委员'|null
+}</div>
+
+                        <h5 style="margin-top:12px;">上下文对象</h5>
+                        <div class="code-block">context = {
+    seats: Array,        // 所有座位对象数组
+    rows: Number,        // 排数
+    cols: Number,        // 列数
+    settings: Object,    // 系统配置
+    blacklist: Array,    // 黑名单
+    whitelist: Array     // 白名单
+}</div>
+
+                        <h5 style="margin-top:12px;">内置维度参考</h5>
+                        <ul class="guide-list">
+                            <li><strong>学业互补</strong>：成绩差异 15-40 分为最佳帮扶区间 (+20分)</li>
+                            <li><strong>性格互补</strong>：外向+内向搭配 (+15分)，中性适配 (+8分)</li>
+                            <li><strong>共同爱好</strong>：每个共同爱好 +8分，上限 20分</li>
+                            <li><strong>职务多样</strong>：不同职务搭配 +10分</li>
+                            <li><strong>性别均衡</strong>：男女搭配 +5分</li>
+                            <li><strong>行内成绩均衡</strong>：同排成绩方差大 +10分</li>
+                            <li><strong>午休聚集惩罚</strong>：相邻午休过多 -10分</li>
+                        </ul>
+
+                        <h5 style="margin-top:12px;">导入与使用</h5>
+                        <ul class="guide-list">
+                            <li>点击底部"智能推荐"旁的下拉菜单，选择"自定义算法"</li>
+                            <li>导入 .js 文件后，算法会自动注册并可切换使用</li>
+                            <li>支持同时导入多个算法，在面板中切换</li>
+                            <li>自定义算法经过安全扫描，禁止危险操作</li>
+                        </ul>
+
+                        <div class="btn-group" style="margin-top:12px;">
+                            <button class="btn btn-secondary btn-sm" id="downloadAlgoTemplateFromGuide">📄 下载算法模板</button>
+                            <button class="btn btn-secondary btn-sm" id="downloadAiDevDocFromAiAlgo">📄 下载完整 AI 开发文档</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Tab: 插件开发 -->
+                <div class="tab-content" id="tab-plugins">
+                    <div class="guide-section"><h4>🔌 插件开发指南</h4>
+                        <div class="guide-note">插件运行在沙箱环境中，可扩展系统功能。涉及危险操作（网络请求、eval等）的插件会被标记为"风险"状态。</div>
+                        <h5 style="margin-top:12px;">插件基本结构</h5>
+                        <div class="code-block">const MyPlugin = {
+    name: "插件名称", description: "描述", version: "1.0.0",
+    defaultEnabled: true, hasSettings: false, defaultSettings: {},
+    init() { /* 初始化 */ },
+    beforeDraw(availableStudents, probabilities, nextSeat) {
+        // 抽取前调用，可修改概率
+        return { availableStudents, probabilities };
+    },
+    afterDraw(student, seat) { /* 抽取后调用 */ },
+    beforeExport(data) { return data; } // 导出前调用
+};
+PluginManager.register('my-plugin', MyPlugin);</div>
+                        <h5 style="margin-top:12px;">可用 API</h5>
+                        <ul class="guide-list">
+                            <li><code>state.students</code> / <code>state.drawnStudents</code> / <code>state.remainingStudents</code></li>
+                            <li><code>state.seats</code> / <code>state.settings</code></li>
+                            <li><code>Toast.success(msg)</code> / <code>Toast.error(msg)</code></li>
+                            <li><code>addLog(icon, text)</code> — 记录操作日志</li>
+                            <li><code>CompositeEval.getScore(student)</code> — 综合评价分</li>
+                        </ul>
+                        <div class="btn-group" style="margin-top:12px;">
+                            <button class="btn btn-secondary btn-sm" id="downloadAiDocFromGuide">📄 下载完整 AI 开发文档</button>
+                            <button class="btn btn-secondary btn-sm" id="downloadPluginTplFromGuide">📋 下载空白插件模板</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary" id="closeHelpBtn">知道了</button></div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div class="app-container">
+        <!-- [FEATURE #10] Sidebar restructured: 3 fixed panels -->
+        <div class="sidebar">
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" data-tab="search"><span class="tab-icon">🔍</span><span class="tab-label">搜索</span></button>
+                <button class="sidebar-tab" data-tab="students"><span class="tab-icon">👥</span><span class="tab-label">学生池</span></button>
+                <button class="sidebar-tab" data-tab="lists"><span class="tab-icon">📋</span><span class="tab-label">名单</span></button>
+            </div>
+            <div class="sidebar-content">
+                <!-- [FEATURE #10] Panel: Full Search (always visible at top) -->
+                <div class="tab-pane active" id="pane-search">
+                    <div class="glass-panel" id="studentSearchPanel">
+                        <div class="panel-header">
+                            <div class="panel-header-left"><span class="panel-icon">🔍</span><div class="panel-title-group"><span class="panel-title">全量搜索</span><span class="panel-subtitle">Ctrl+K 命令面板 | 支持拼音/高级语法</span></div></div>
+                            <span class="panel-toggle">▼</span>
+                        </div>
+                        <div class="panel-content"><div class="panel-content-inner">
+                            <div class="pool-search">
+                                <input type="text" id="fullStudentSearch" placeholder="搜索姓名/拼音/职务/性格… (支持 >90 gender:男 等语法)">
+                            </div>
+                            <div id="fullSearchFilters" class="pool-filters">
+                                <button class="pool-filter active" data-filter="all">全部</button>
+                                <button class="pool-filter" data-filter="seated">已排座</button>
+                                <button class="pool-filter" data-filter="pending">待抽取</button>
+                                <button class="pool-filter" data-filter="pinned">📌 固定</button>
+                                <button class="pool-filter" data-filter="male">♂ 男</button>
+                                <button class="pool-filter" data-filter="female">♀ 女</button>
+                            </div>
+                            <div class="full-search-results" id="fullSearchResults"><div class="pool-empty">输入关键词搜索全部学生</div></div>
+                        </div></div>
+                    </div>
+                    <!-- Operation Log (visible by default) -->
+                    <div class="glass-panel" id="logPanel">
+                        <div class="panel-header">
+                            <div class="panel-header-left"><span class="panel-icon">📋</span><div class="panel-title-group"><span class="panel-title">操作日志</span></div></div>
+                            <span class="panel-toggle">▼</span>
+                        </div>
+                        <div class="panel-content"><div class="panel-content-inner">
+                            <div class="log-list" id="logList"><div class="log-empty">暂无操作记录</div></div>
+                            <button class="btn btn-ghost btn-sm" id="clearLog" style="margin-top:8px;">清空日志</button>
+                        </div></div>
+                    </div>
+                </div>
+
+                <!-- Panel: Student Pool -->
+                <div class="tab-pane" id="pane-students">
+                    <div class="glass-panel" id="poolPanel">
+                        <div class="panel-header">
+                            <div class="panel-header-left"><span class="panel-icon">👥</span><div class="panel-title-group"><span class="panel-title">学生池</span><span class="panel-subtitle" id="poolSubtitle">0 人待抽取</span></div></div>
+                            <span class="panel-toggle">▼</span>
+                        </div>
+                        <div class="panel-content"><div class="panel-content-inner">
+                            <div class="pool-search" style="position:relative;">
+                                <input type="text" id="poolSearch" placeholder="🔍 搜索学生姓名/拼音...">
+                                <div class="smart-search-dropdown" id="poolSearchDropdown"></div>
+                            </div>
+                            <div class="pool-filters">
+                                <span class="pool-filter active" data-filter="all">全部</span>
+                                <span class="pool-filter" data-filter="male">♂ 男生</span>
+                                <span class="pool-filter" data-filter="female">♀ 女生</span>
+                                <span class="pool-filter" data-filter="lunch">💤 午休</span>
+                                <span class="pool-filter" data-filter="no-lunch">非午休</span>
+                            </div>
+                            <div class="pool-list" id="poolList"><div class="pool-empty">请先导入学生名单</div></div>
+                            <div class="pool-click-hint" id="poolClickHint">👆 已选中学生，点击空座位落座 | ESC 取消</div>
+                        </div></div>
+                    </div>
+                    <!-- Student Import -->
+                    <div class="glass-panel" id="studentsPanel">
+                        <div class="panel-header">
+                            <div class="panel-header-left"><span class="panel-icon">📝</span><div class="panel-title-group"><span class="panel-title">导入学生</span><span class="panel-subtitle">文本或Excel导入</span></div></div>
+                            <span class="panel-toggle">▼</span>
+                        </div>
+                        <div class="panel-content"><div class="panel-content-inner">
+                            <div class="form-group">
+                                <label class="form-label">科目管理</label>
+                                <div class="subject-tabs" id="subjectTabs"></div>
+                                <div style="display:flex;gap:4px;">
+                                    <input type="text" class="form-input" id="newSubjectInput" placeholder="添加科目" style="flex:1;font-size:12px;">
+                                    <button class="btn btn-ghost btn-sm" id="addSubjectBtn">+ 添加</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">性别映射 (男=值,女=值)</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-input" id="maleMapping" value="男">
+                                    <input type="text" class="form-input" id="femaleMapping" value="女">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">文本输入</label>
+                                <span class="form-hint" style="margin-bottom:4px;">格式说明与模板下载请查看 ? 帮助 → 数据模板</span>
+                                <textarea class="form-input form-textarea" id="studentsText" placeholder="张三,男,1,85,92,78,外向,篮球/绘画,班长&#10;李四,女,0,92,88,95,内向,阅读,&#10;王五,男,0,78,65,72,,,"></textarea>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-primary" id="importText">导入文本</button>
+                                <button class="btn btn-secondary" id="importExcel">📂 导入Excel</button>
+                                <button class="btn btn-ghost btn-sm" id="fillExample">📋 填入示例</button>
+                                <button class="btn btn-danger btn-sm" id="clearStudents">清空名单</button>
+                                <input type="file" id="excelFile" accept=".xlsx,.xls" style="display:none;">
+                            </div>
+                        </div></div>
+                    </div>
+                </div>
+
+                <!-- [FEATURE #10] Panel: Blacklist/Whitelist -->
+                <div class="tab-pane" id="pane-lists">
+                    <div class="glass-panel" id="listsPanel">
+                        <div class="panel-header">
+                            <div class="panel-header-left"><span class="panel-icon">📋</span><div class="panel-title-group"><span class="panel-title">黑白名单</span></div></div>
+                            <span class="panel-toggle">▼</span>
+                        </div>
+                        <div class="panel-content"><div class="panel-content-inner">
+                            <div class="form-group">
+                                <label class="form-label">🚫 黑名单 (空格分隔)</label>
+                                <textarea class="form-input form-textarea" id="blacklist" placeholder="张三 李四&#10;*王五 赵六"></textarea>
+                                <span class="form-hint">同组学生分开坐。* 标记锚点。</span>
+                                <div class="smart-search">
+                                    <input type="text" class="smart-search-input" id="blacklistSearch" placeholder="🔍 搜索添加...">
+                                    <div class="smart-search-dropdown" id="blacklistDropdown"></div>
+                                </div>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-secondary btn-sm" id="importBlacklist">📂 导入</button>
+                                <button class="btn btn-ghost btn-sm" id="clearBlacklist">清空</button>
+                                <input type="file" id="blacklistFile" accept=".xlsx,.xls" style="display:none;">
+                            </div>
+                            <details style="margin-top:8px;">
+                                <summary style="font-size:11px;color:var(--text-tertiary);cursor:pointer;">⚙️ 高级设置</summary>
+                                <div style="margin-top:8px;">
+                                    <div class="form-group">
+                                        <label class="form-label">惩罚力度 (%)</label>
+                                        <input type="number" class="form-input" id="blacklistPenalty" value="95" min="0" max="100">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">隔离半径 (格)</label>
+                                        <input type="number" class="form-input" id="blacklistRadius" value="2" min="1" max="10">
+                                    </div>
+                                </div>
+                            </details>
+                            <hr style="border:none;border-top:1px solid var(--glass-border);margin:12px 0;">
+                            <div class="form-group">
+                                <label class="form-label">✅ 白名单 (空格分隔)</label>
+                                <textarea class="form-input form-textarea" id="whitelist" placeholder="小明 小红&#10;*小刚 小丽"></textarea>
+                                <span class="form-hint">同组学生靠近坐。* 标记锚点。</span>
+                                <div class="smart-search">
+                                    <input type="text" class="smart-search-input" id="whitelistSearch" placeholder="🔍 搜索添加...">
+                                    <div class="smart-search-dropdown" id="whitelistDropdown"></div>
+                                </div>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-secondary btn-sm" id="importWhitelist">📂 导入</button>
+                                <button class="btn btn-ghost btn-sm" id="clearWhitelist">清空</button>
+                                <input type="file" id="whitelistFile" accept=".xlsx,.xls" style="display:none;">
+                            </div>
+                            <details style="margin-top:8px;">
+                                <summary style="font-size:11px;color:var(--text-tertiary);cursor:pointer;">⚙️ 高级设置</summary>
+                                <div style="margin-top:8px;">
+                                    <div class="form-group">
+                                        <label class="form-label">同桌加成 (%)</label>
+                                        <input type="number" class="form-input" id="whitelistDeskBonus" value="200" min="0" max="500">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">前后桌加成 (%)</label>
+                                        <input type="number" class="form-input" id="whitelistFrontBackBonus" value="120" min="0" max="400">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">斜对角加成 (%)</label>
+                                        <input type="number" class="form-input" id="whitelistDiagonalBonus" value="60" min="0" max="300">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">保底加成 (%)</label>
+                                        <input type="number" class="form-input" id="whitelistFallbackBonus" value="150" min="0" max="400">
+                                    </div>
+                                </div>
+                            </details>
+                        </div></div>
+                    </div>
+                </div>
+            </div> <!-- end sidebar-content -->
+        </div> <!-- end sidebar -->
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="print-header"><h2 id="printTitle">教室座位表</h2><p id="printDate"></p><p id="printStats" style="font-size:12px;color:#666;margin-top:4px;"></p></div>
+            <div class="preview-container" id="previewContainer">
+                <div class="top-buttons">
+                    <button class="btn btn-secondary" id="themeToggle">🌙</button>
+                    <button class="btn btn-secondary touch-mode-btn" id="touchModeBtn">🖐️</button>
+                    <button class="btn btn-secondary" id="globalSettingsBtn">⚙️</button>
+                    <button class="btn btn-secondary" id="helpBtn">?</button>
+                    <button class="btn btn-secondary" id="undoBtn" title="撤销 (Ctrl+Z)">↩️</button>
+                    <button class="btn btn-secondary" id="redoBtn" title="重做 (Ctrl+Y)">↪️</button>
+                </div>
+                <div class="quick-info" id="quickInfo">
+                    <span class="qi-item" data-qi="layout">📐 <span id="qiLayout">7×11</span></span>
+                    <span class="qi-divider"></span>
+                    <span class="qi-item" data-qi="drawn">👥 <span id="qiDrawn">0</span>/<span id="qiTotal">0</span></span>
+                    <span class="qi-divider"></span>
+                    <span class="qi-item" data-qi="remaining">⏳ <span id="qiRemaining">0</span>剩余</span>
+                    <span class="qi-divider"></span>
+                    <span class="qi-item" data-qi="male">♂<span id="qiMaleRem">0</span></span>
+                    <span class="qi-item" data-qi="female"> ♀<span id="qiFemaleRem">0</span></span>
+                    <span class="qi-item" data-qi="lunch"> 💤<span id="qiLunch">0</span></span>
+                </div>
+                <div class="batch-toolbar" id="batchToolbar">
+                    已选 <span class="batch-count" id="batchCount">0</span> 个座位
+                    <button class="btn btn-sm btn-ghost" id="batchClear">清空选中</button>
+                    <button class="btn btn-sm btn-ghost" id="batchDisable">禁用选中</button>
+                    <button class="btn btn-sm btn-ghost" id="batchLunch">切换午休</button>
+                    <button class="btn btn-sm btn-ghost" id="batchCancel">取消</button>
+                </div>
+                <div class="classroom" id="classroom">
+                    <div class="platform-area" id="platformArea">
+                        <div class="platform-side-seat" id="platformLeft" data-type="platform-left">
+                            <span class="seat-number">讲台左</span><span class="seat-name"></span>
+                        </div>
+                        <div class="platform">讲台</div>
+                        <div class="platform-side-seat" id="platformRight" data-type="platform-right">
+                            <span class="seat-number">讲台右</span><span class="seat-name"></span>
+                        </div>
+                    </div>
+                    <div class="seats-grid-wrapper">
+                        <div class="column-headers" id="columnHeaders"></div>
+                        <div class="seats-grid" id="seatsGrid"></div>
+                    </div>
+                </div>
+                <div class="empty-state" id="emptyState" style="display:none;">
+                    <div class="empty-state-icon">📚</div>
+                    <div class="empty-state-text">暂无学生数据</div>
+                    <div class="empty-state-hint">切换到"学生"Tab导入名单后开始排座位</div>
+                </div>
+                <div class="heatmap-legend" id="heatmapLegend" style="display:none;">
+                    <div class="heatmap-type-selector" id="heatmapTypeSelector">
+                        <button class="heatmap-type-btn active" data-type="composite">综合评价</button>
+                        <button class="heatmap-type-btn" data-type="average">综合成绩</button>
+                        <button class="heatmap-type-btn" data-type="subject">单科成绩</button>
+                    </div>
+                    <span id="heatmapSubjectWrap" style="display:none;">
+                        <select class="form-input" id="heatmapSubjectSelect" style="width:auto;font-size:11px;padding:2px 6px;"></select>
+                    </span>
+                    <span id="heatmapLowLabel">低分</span><div class="heatmap-legend-bar"></div><span id="heatmapHighLabel">高分</span>
+                    <span style="margin-left:8px;cursor:pointer;" id="closeHeatmap">✕</span>
+                </div>
+                <div class="seat-legend" id="seatLegend">
+                    <span class="legend-item"><span class="legend-dot male"></span> 男生</span>
+                    <span class="legend-item"><span class="legend-dot female"></span> 女生</span>
+                    <span class="legend-item"><span class="legend-line"></span> 午休</span>
+                    <span class="legend-item"><span class="legend-stripe"></span> 未录入成绩</span>
+                </div>
+                <div class="podium-toggle">
+                    <button class="btn btn-ghost btn-sm" id="togglePerspective" title="讲台视角">🎓 讲台视角</button>
+                </div>
+            </div>
+            <!-- Bottom Actions -->
+            <div class="bottom-actions">
+                <button class="btn btn-primary btn-lg" id="drawNext" aria-label="抽取下一个学生">🎲 抽取下一个</button>
+                <button class="btn btn-success" id="autoDraw" aria-label="一键自动抽取所有学生">⚡ 一键自动抽取</button>
+                <button class="btn btn-warning" id="stopAutoDraw" style="display:none;" aria-label="停止自动抽取">⏹ 停止</button>
+                <button class="btn btn-secondary" id="resetDraw" aria-label="重置抽取">🔄 重置</button>
+                <div style="position:relative;display:inline-flex;">
+                    <button class="btn btn-secondary" id="smartRecommend" aria-label="智能座位推荐">🧠 智能推荐 ▾</button>
+                    <div id="recommendDropdown" style="display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:var(--glass-bg-heavy);backdrop-filter:blur(40px);border:1px solid var(--glass-border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:4px;z-index:100;min-width:160px;">
+                        <div class="context-menu-item" id="smartRecommendAction">🧠 智能推荐</div>
+                        <div class="context-menu-item" id="customAlgoAction">🧬 自定义算法</div>
+                    </div>
+                </div>
+                <div style="position:relative;display:inline-flex;">
+                    <button class="btn btn-secondary" id="viewMenuBtn" aria-label="视图选项">👁️ 视图 ▾</button>
+                    <div id="viewDropdown" style="display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:var(--glass-bg-heavy);backdrop-filter:blur(40px);border:1px solid var(--glass-border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:4px;z-index:100;min-width:160px;">
+                        <div class="context-menu-item" id="toggleHeatmap">🔥 热力图</div>
+                        <div class="context-menu-item" id="viewStats">📊 统计</div>
+                        <div style="height:1px;background:var(--glass-border);margin:4px 0;"></div>
+                        <div class="context-menu-item" id="viewTogglePerspective">🎓 讲台视角</div>
+                    </div>
+                </div>
+                <div style="position:relative;display:inline-flex;">
+                    <button class="btn btn-secondary" id="exportMenuBtn" aria-label="导出或打印座位表">📤 导出 ▾</button>
+                    <div id="exportDropdown" style="display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:4px;background:var(--glass-bg-heavy);backdrop-filter:blur(40px);border:1px solid var(--glass-border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:4px;z-index:100;min-width:160px;">
+                        <div class="context-menu-item" id="exportSeats">📊 导出座位表 (Excel)</div>
+                        <div style="padding:4px 14px;"><label class="form-checkbox" style="font-size:12px;"><input type="checkbox" id="exportFullData"> 导出完整数据（含多科成绩/性格/爱好/职务）</label></div>
+                        <div class="context-menu-item" id="exportScreenshot">📸 截图导出</div>
+                        <div class="context-menu-item" id="exportParentView">📄 家长会视图 (打印)</div>
+                        <div class="context-menu-item" id="printSeats">🖨️ 打印座位表</div>
+                    </div>
+                </div>
+                <button class="btn btn-ghost" id="moreMenuBtn" aria-label="更多操作">⋯ 更多</button>
+            </div>
+        </div>
+    </div>
+    <!-- Saved Indicator -->
+    <div class="saved-indicator" id="savedIndicator"><span class="dot"></span><span>已保存</span></div>
+    
+    <!-- Performance Mode Modal -->
+    <div class="modal-overlay" id="perfModeModal">
+        <div class="modal" style="max-width:480px;">
+            <div class="modal-header">
+                <h3 class="modal-title">⚡ 性能模式检测</h3>
+            </div>
+            <div class="modal-content">
+                <div class="perf-detect-result" id="perfDetectResult">
+                    <p style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">
+                        正在检测您的电脑配置...
+                    </p>
+                </div>
+                <div class="perf-mode-options" id="perfModeOptions" style="display:none;">
+                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                        请选择适合您的性能模式：
+                    </p>
+                    <div class="perf-mode-grid">
+                        <div class="perf-mode-card" data-mode="low">
+                            <div class="perf-mode-icon">🚀</div>
+                            <div class="perf-mode-name">流畅模式</div>
+                            <div class="perf-mode-desc">关闭动画和毛玻璃<br>适合低配电脑</div>
+                        </div>
+                        <div class="perf-mode-card" data-mode="medium">
+                            <div class="perf-mode-icon">⚖️</div>
+                            <div class="perf-mode-name">平衡模式</div>
+                            <div class="perf-mode-desc">保留基本动画<br>推荐大多数用户</div>
+                        </div>
+                        <div class="perf-mode-card" data-mode="high">
+                            <div class="perf-mode-icon">✨</div>
+                            <div class="perf-mode-name">高质量模式</div>
+                            <div class="perf-mode-desc">全部特效开启<br>适合高配电脑</div>
+                        </div>
+                    </div>
+                    <div class="form-checkbox" style="margin-top:12px;">
+                        <input type="checkbox" id="perfRememberChoice" checked>
+                        <label for="perfRememberChoice">记住我的选择</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="perfModeConfirm" style="display:none;">确认选择</button>
+            </div>
+        </div>
+    </div>
+
+<script src="js/config.js" defer></script>
+<script src="js/utils.js" defer></script>
+<script src="js/modules.js" defer></script>
+<script src="js/analysis.js" defer></script>
+<script src="js/algorithm.js" defer></script>
+<script src="js/ui.js" defer></script>
+<script src="js/app.js" defer></script>
+</body>
+</html>
